@@ -9,4 +9,5 @@ gem 'mysql2-cs-bind'
 group :development do
   gem 'sinatra-contrib'
   gem 'rack-lineprof'
+  gem 'pry-byebug'
 end

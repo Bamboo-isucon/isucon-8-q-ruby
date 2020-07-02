@@ -78,34 +78,72 @@ module Torb
 
         # zero fill
         event['total']   = 0
-        event['remains'] = 0
+        event['remains'] = 1000
         event['sheets'] = {}
         %w[S A B C].each do |rank|
-          event['sheets'][rank] = { 'total' => 0, 'remains' => 0, 'detail' => [] }
+          event['sheets'][rank] = { 'total' => 0, 'remains' => 0 }
         end
+        event['sheets']["S"]["remains"] = 50
+        event['sheets']["A"]["remains"] = 150
+        event['sheets']["B"]["remains"] = 300
+        event['sheets']["C"]["remains"] = 500
 
-        sheets = db.query('SELECT * FROM sheets ORDER BY `rank`, num')
-        sheets.each do |sheet|
-          event['sheets'][sheet['rank']]['price'] ||= event['price'] + sheet['price']
-          event['total'] += 1
-          event['sheets'][sheet['rank']]['total'] += 1
+        reservations = db.xquery('SELECT * FROM reservations WHERE event_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)', event['id'])
+        s_detail = (1..50).map{ |index|
+          {"num" => index }
+        }
+        a_detail = (1..150).map{ |index|
+          {"num" => index }
+        }
+        b_detail = (1..300).map{ |index|
+          {"num" => index }
+        }
+        c_detail = (1..500).map{ |index|
+          {"num" => index }
+        }
 
-          reservation = db.xquery('SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)', event['id'], sheet['id']).first
-          if reservation
-            sheet['mine']        = true if login_user_id && reservation['user_id'] == login_user_id
-            sheet['reserved']    = true
-            sheet['reserved_at'] = reservation['reserved_at'].to_i
+        reservations.each do |reservation|
+          if reservation['sheet_id'] <= 50
+            num = reservation['sheet_id']
+            s_detail[num-1]['reserved'] = true
+            s_detail[num-1]['reserved_at'] = reservation['reserved_at'].to_i
+            s_detail[num-1]['mine'] = true if login_user_id && reservation['user_id'] == login_user_id
+            event['sheets']["S"]['remains'] -= 1
+          elsif reservation['sheet_id'] <= 200
+            num = reservation['sheet_id'] - 50
+            a_detail[num-1]['reserved'] = true
+            a_detail[num-1]['reserved_at'] = reservation['reserved_at'].to_i
+            a_detail[num-1]['mine'] = true if login_user_id && reservation['user_id'] == login_user_id
+            event['sheets']["A"]['remains'] -= 1
+          elsif reservation['sheet_id'] <= 500
+            num = reservation['sheet_id'] - 200
+            b_detail[num-1]['reserved'] = true
+            b_detail[num-1]['reserved_at'] = reservation['reserved_at'].to_i
+            b_detail[num-1]['mine'] = true if login_user_id && reservation['user_id'] == login_user_id
+            event['sheets']["B"]['remains'] -= 1
           else
-            event['remains'] += 1
-            event['sheets'][sheet['rank']]['remains'] += 1
+            num = reservation['sheet_id'] - 500
+            c_detail[num-1]['reserved'] = true
+            c_detail[num-1]['reserved_at'] = reservation['reserved_at'].to_i
+            c_detail[num-1]['mine'] = true if login_user_id && reservation['user_id'] == login_user_id
+            event['sheets']["C"]['remains'] -= 1
           end
-
-          event['sheets'][sheet['rank']]['detail'].push(sheet)
-
-          sheet.delete('id')
-          sheet.delete('price')
-          sheet.delete('rank')
+          event['remains'] -= 1
         end
+        event["sheets"]["S"]["detail"] = s_detail
+        event["sheets"]["A"]["detail"] = a_detail
+        event["sheets"]["B"]["detail"] = b_detail
+        event["sheets"]["C"]["detail"] = c_detail
+
+        event['sheets']["S"]['price'] = event['price'] + 5000
+        event['sheets']["A"]['price'] = event['price'] + 3000
+        event['sheets']["B"]['price'] = event['price'] + 1000
+        event['sheets']["C"]['price'] = event['price']
+        event['total'] = 1000
+        event['sheets']["S"]['total'] = 50
+        event['sheets']["A"]['total'] = 150
+        event['sheets']["B"]['total'] = 300
+        event['sheets']["C"]['total'] = 500
 
         event['public'] = event.delete('public_fg')
         event['closed'] = event.delete('closed_fg')
